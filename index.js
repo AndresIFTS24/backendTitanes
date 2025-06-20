@@ -29,8 +29,8 @@ const connectionString = 'Driver={ODBC Driver 17 for SQL Server};Server=localhos
 app.post('/api/profesores', async (req, res) => {
   console.log('📥 req.body:', req.body); // DEBUG
 
-  const { nombre, apellido, dni, fecha_nacimiento, direccion, telefono, email, contraseña, especialidad, actividades } = req.body;
-  if (!nombre || !apellido || !dni || !fecha_nacimiento || !direccion || !telefono || !email || !contraseña || !especialidad || !Array.isArray(actividades) || actividades.length === 0) {
+  const { nombre, apellido, dni, fecha_nacimiento, direccion, telefono, email, contrasena, especialidad, actividades } = req.body;
+  if (!nombre || !apellido || !dni || !fecha_nacimiento || !direccion || !telefono || !email || !contrasena || !especialidad || !Array.isArray(actividades) || actividades.length === 0) {
     return res.status(400).json({ mensaje: 'Faltan datos obligatorios' });
   }
 
@@ -72,7 +72,7 @@ app.post('/api/profesores', async (req, res) => {
       // Insertar usuario
       await ejecutarQuery(conn, `
         INSERT INTO Usuario (id_persona, email, contraseña, id_rol, habilitado, fecha_de_registro, ultimo_inicio_sesion)
-        VALUES (?, ?, ?, 2, 1, GETDATE(), GETDATE())`, [id_persona, email, contraseña]);
+        VALUES (?, ?, ?, 2, 1, GETDATE(), GETDATE())`, [id_persona, email, contrasena]);
 
       // Obtener ids de las actividades por su nombre
       for (const nombreActividad of actividades) {
@@ -194,7 +194,7 @@ app.put('/api/profesores/:id', (req, res) => {
     especialidad,
     actividades,
     email,
-    contraseña,
+    contrasena,
   } = req.body;
 
   const id_profesor = req.params.id;
@@ -272,7 +272,7 @@ app.put('/api/profesores/:id', (req, res) => {
                       if (errores > 0) return res.status(500).send("Error al asignar nuevas actividades");
 
                       // 7. Si hay email o contraseña, actualizar Usuario
-                      if (email || contraseña) {
+                      if (email || contrasena) {
                         const campos = [];
                         const valores = [];
 
@@ -280,9 +280,9 @@ app.put('/api/profesores/:id', (req, res) => {
                           campos.push("email = ?");
                           valores.push(email);
                         }
-                        if (contraseña) {
+                        if (contrasena) {
                           campos.push("contraseña = ?");
-                          valores.push(contraseña);
+                          valores.push(contrasena);
                         }
 
                         const queryUsuario = `UPDATE Usuario SET ${campos.join(', ')} WHERE id_persona = ?`;
@@ -290,10 +290,10 @@ app.put('/api/profesores/:id', (req, res) => {
 
                         sql.query(connectionString, queryUsuario, valores, (err8) => {
                           if (err8) return res.status(500).send("Error al actualizar usuario");
-                          return res.send("Profesor actualizado correctamente");
+                          return res.status(200).json({ mensaje: "Profesor actualizado correctamente" });
                         });
                       } else {
-                        return res.status(200).send("Profesor actualizado correctamente");
+                          return res.status(200).json({ mensaje: "Profesor actualizado correctamente" });
                       }
                     }
                   });
