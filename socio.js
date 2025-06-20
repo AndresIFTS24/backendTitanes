@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const sql = require('msnodesqlv8');
+const { rows } = require('mssql');
 
 const app = express();
 const PORT = 3000;
@@ -281,7 +282,41 @@ function ejecutarQuery(conn, query, params) {
     });
   });
 }
-
+app.get('/api/actividades', (req, res) => {
+  const query = `
+    SELECT 
+      id_actividad,
+      nombre,
+      categoria,
+      dia,
+      horario,
+      lugar,
+      '$ ' + FORMAT(precio, 'N2', 'es-AR') AS precio,
+      cupo_maximo,
+      cantidad_anotados
+    FROM Actividad
+  `;
+  sql.query(connectionString, query, (err, rows) => {
+    if (err) {
+      console.error('Error en la consulta:', err);
+      res.status(500).send('Error en la consulta');
+    } else {
+      res.json(rows);
+    }
+  });
+});
+app.get('/api/categoriaSocio', (req, res)=>{
+  const query = `SELECT id_categoria, nombre, descripcion, cuota
+  FROM Categoria;`;
+  sql.query(connectionString, query, (err, rows)=>{
+    if (err) {
+      console.log('Error en la consulta: ', err);
+      res.status(500).send('Error en la consulta');
+    }else{
+      res.json(rows);
+    }
+  });
+})
 app.listen(PORT, () => {
     console.log(`✅ Servidor backend escuchando en http://localhost:${PORT}`);
 });
