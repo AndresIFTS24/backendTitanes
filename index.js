@@ -27,6 +27,8 @@ const connectionString = 'Driver={ODBC Driver 17 for SQL Server};Server=localhos
 // REGISTRAR PROFESOR
 // -------------------------------------
 app.post('/api/profesores', async (req, res) => {
+  console.log('📥 req.body:', req.body); // DEBUG
+
   const { nombre, apellido, dni, fecha_nacimiento, direccion, telefono, email, contraseña, especialidad, actividades } = req.body;
   if (!nombre || !apellido || !dni || !fecha_nacimiento || !direccion || !telefono || !email || !contraseña || !especialidad || !Array.isArray(actividades) || actividades.length === 0) {
     return res.status(400).json({ mensaje: 'Faltan datos obligatorios' });
@@ -181,7 +183,7 @@ app.delete('/api/profesores/:id', (req, res) => {
 // MODIFICAR PROFESOR
 // -------------------------------------
 app.put('/api/profesores/:id', (req, res) => {
-
+  console.log('📥 req.body:', req.body); // DEBUG
   const {
     nombre,
     apellido,
@@ -224,7 +226,7 @@ app.put('/api/profesores/:id', (req, res) => {
 
       // 3. Buscar IDs de las actividades
       const placeholders = actividades.map(() => '?').join(',');
-      const buscarActividades = `SELECT id_actividad FROM Actividad WHERE nombre IN (${placeholders})`;
+      const buscarActividades = `SELECT id_actividad FROM Actividad WHERE id_actividad IN (${placeholders})`;
 
       sql.query(connectionString, buscarActividades, actividades, (err3, resultAct) => {
         if (err3) return res.status(500).send("Error al buscar actividades");
@@ -291,7 +293,7 @@ app.put('/api/profesores/:id', (req, res) => {
                           return res.send("Profesor actualizado correctamente");
                         });
                       } else {
-                        return res.send("Profesor actualizado correctamente");
+                        return res.status(200).send("Profesor actualizado correctamente");
                       }
                     }
                   });
@@ -309,6 +311,8 @@ app.put('/api/profesores/:id', (req, res) => {
 // LOGIN
 // -------------------------------------
 app.post('/api/login', (req, res) => {
+  console.log('📥 req.body:', req.body); // DEBUG
+
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ mensaje: 'Faltan email o contraseña' });
 
