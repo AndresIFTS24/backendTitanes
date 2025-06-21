@@ -33,17 +33,17 @@ function validarActividad(data) {
 // RUTAS
 app.get('/api/actividades', (req, res) => {
   const query = `
-    SELECT 
-      id_actividad,
-      nombre,
-      categoria,
-      dia,
-      horario,
-      lugar,
-      '$ ' + FORMAT(precio, 'N2', 'es-AR') AS precio,
-      cupo_maximo,
-      cantidad_anotados
-    FROM Actividad
+ SELECT 
+  id_actividad,
+  nombre,
+  categoria,
+  dia,
+  horario,
+  lugar,
+  precio,
+  cupo_maximo,
+  cantidad_anotados
+FROM Actividad
   `;
   sql.query(connectionString, query, (err, rows) => {
     if (err) {
