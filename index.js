@@ -375,7 +375,7 @@ app.get('/api/actividades', (req, res) => {
       dia,
       horario,
       lugar,
-      '$ ' + FORMAT(precio, 'N2', 'es-AR') AS precio,
+      precio,
       cupo_maximo,
       cantidad_anotados
     FROM Actividad
