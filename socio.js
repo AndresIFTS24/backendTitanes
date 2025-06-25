@@ -105,10 +105,42 @@ res.status(200).json({ mensaje: 'Socio registrado exitosamente' });
 }
     });
 });
+// app.get('/api/socios/nombre/:nombre', (req, res) => {
+// const nombre = `%${req.params.nombre.trim().toLowerCase()}%`;
+
+//   sql.open(connectionString, async (err, conn) => {
+//     if (err) return res.status(500).json({ mensaje: 'Error de conexión', error: err });
+
+//     try {
+//       const query = `
+//         SELECT 
+//           P.nombre AS nombre_socio,
+//           P.apellido AS apellido_socio,
+//           P.dni,
+//           S.estado_socio,
+//           C.nombre AS categoria
+//         FROM Persona P
+//         INNER JOIN Socio S ON P.id_persona = S.id_persona
+//         INNER JOIN Categoria C ON S.id_categoria = C.id_categoria
+// WHERE LOWER(P.nombre) LIKE @nombre
+//       `;
+
+//       const result = await conn.request()
+// .input('nombre', sql.VarChar, nombre)
+//         .query(query);
+
+//       res.json(result.recordset);
+//     } catch (error) {
+//       console.error("Error al obtener socios:", error);
+//       res.status(500).json({ mensaje: 'Error al obtener socios', error: error.message || error });
+//     }
+//   });
+// });
 
 app.put('/api/socios/:id', (req, res) => {
-    const idSocio = req.params.id;
-    const {
+  console.log('📥 req.body:', req.body);
+  const idSocio = req.params.id;
+  const {
     nombreSocio,
     apellidoSocio,
     dniSocio,
@@ -116,70 +148,78 @@ app.put('/api/socios/:id', (req, res) => {
     direccionSocio,
     telefonoSocio,
     categoriaSocio,
-    actividadesSocio,
-    } = req.body;
+    actividadesSocio
+  } = req.body;
 
-  // Validación de campos
-    if (
+  if (
     !nombreSocio || !apellidoSocio || !dniSocio ||
     !fecha_nacimientoSocio || !direccionSocio || !telefonoSocio ||
     !categoriaSocio || !Array.isArray(actividadesSocio)
-    ) {
+  ) {
     return res.status(400).json({ mensaje: 'Faltan datos obligatorios' });
-    }
+  }
 
-    sql.open(connectionString, async (err, conn) => {
+  sql.open(connectionString, async (err, conn) => {
     if (err) {
-        return res.status(500).json({ mensaje: 'Error al conectar con la base de datos', error: err });
+      return res.status(500).json({ mensaje: 'Error al conectar con la base de datos', error: err });
     }
 
     try {
       // Obtener id_persona desde id_socio
-        const socioRes = await ejecutarQuery(conn, 'SELECT id_persona FROM Socio WHERE id_socio = ?', [idSocio]);
-        if (socioRes.recordset.length === 0) {
+      const socioRes = await ejecutarQuery(conn, 'SELECT id_persona FROM Socio WHERE id_socio = ?', [idSocio]);
+      if (socioRes.recordset.length === 0) {
         return res.status(404).json({ mensaje: 'Socio no encontrado' });
-        }
+      }
 
-        const id_persona = socioRes.recordset[0].id_persona;
+      const id_persona = socioRes.recordset[0].id_persona;
 
-      // Actualizar datos de Persona
-        await ejecutarQuery(conn, `
+      // Actualizar Persona
+      await ejecutarQuery(conn, `
         UPDATE Persona
         SET nombre = ?, apellido = ?, dni = ?, fecha_nacimiento = ?, direccion = ?, telefono = ?
-        WHERE id_persona = ?`,
-        [nombreSocio, apellidoSocio, dniSocio, fecha_nacimientoSocio, direccionSocio, telefonoSocio, id_persona]);
+        WHERE id_persona = ?
+      `, [nombreSocio, apellidoSocio, dniSocio, fecha_nacimientoSocio, direccionSocio, telefonoSocio, id_persona]);
 
-      // Obtener id_categoria desde nombre
-        const catRes = await ejecutarQuery(conn, 'SELECT id_categoria FROM Categoria WHERE nombre = ?', [categoriaSocio]);
-        if (catRes.recordset.length === 0) {
+      // Obtener id_categoria
+      const catRes = await ejecutarQuery(conn, 'SELECT id_categoria FROM Categoria WHERE nombre = ?', [categoriaSocio]);
+      if (catRes.recordset.length === 0) {
         return res.status(404).json({ mensaje: 'Categoría no encontrada' });
+      }
+      const id_categoria = catRes.recordset[0].id_categoria;
+
+      // Actualizar Socio
+      await ejecutarQuery(conn, `UPDATE Socio SET id_categoria = ? WHERE id_socio = ?`, [id_categoria, idSocio]);
+
+      // Borrar inscripciones anteriores
+      await ejecutarQuery(conn, `DELETE FROM Inscripcion WHERE id_socio = ?`, [idSocio]);
+
+      // Traer todos los ID de las actividades en una sola consulta
+      if (actividadesSocio.length > 0) {
+        const placeholders = actividadesSocio.map(() => '?').join(', ');
+        const queryActividades = `SELECT id_actividad, nombre FROM Actividad WHERE nombre IN (${placeholders})`;
+        const actRes = await ejecutarQuery(conn, queryActividades, actividadesSocio);
+
+        // Verificamos si todas las actividades existen
+        if (actRes.recordset.length !== actividadesSocio.length) {
+          return res.status(400).json({ mensaje: 'Una o más actividades no fueron encontradas' });
         }
-        const id_categoria = catRes.recordset[0].id_categoria;
 
-      // Actualizar categoría del socio
-        await ejecutarQuery(conn, `UPDATE Socio SET id_categoria = ? WHERE id_socio = ?`, [id_categoria, idSocio]);
-
-      // Borrar inscripciones actuales
-        await ejecutarQuery(conn, `DELETE FROM Inscripcion WHERE id_socio = ?`, [idSocio]);
-
-      // Insertar nuevas inscripciones
-        for (const nombreActividad of actividadesSocio) {
-        const actRes = await ejecutarQuery(conn, 'SELECT id_actividad FROM Actividad WHERE nombre = ?', [nombreActividad]);
-        if (actRes.recordset.length === 0) throw new Error(`Actividad no encontrada: ${nombreActividad}`);
-
-        const id_actividad = actRes.recordset[0].id_actividad;
-        await ejecutarQuery(conn, `
+        // Insertar todas las inscripciones nuevas
+        for (const act of actRes.recordset) {
+          await ejecutarQuery(conn, `
             INSERT INTO Inscripcion (id_socio, id_actividad, fecha_inscripcion, estado)
-            VALUES (?, ?, GETDATE(), 1)`, [idSocio, id_actividad]);
+            VALUES (?, ?, GETDATE(), 1)
+          `, [idSocio, act.id_actividad]);
         }
+      }
 
-        res.status(200).json({ mensaje: 'Socio actualizado exitosamente' });
+      res.status(200).json({ mensaje: 'Socio actualizado exitosamente' });
 
     } catch (error) {
-        console.error("Error al actualizar socio:", error);
-        res.status(500).json({ mensaje: 'Error al actualizar socio', error: error.message || error });
+      console.error("Error al actualizar socio:", error);
+      res.status(500).json({ mensaje: 'Error al actualizar socio', error: error.message || error });
     }
-    });
+  });
 });
 app.get('/api/socios', (req, res) => {
   sql.open(connectionString, async (err, conn) => {
@@ -241,6 +281,79 @@ app.get('/api/socios', (req, res) => {
     }
   });
 });
+app.get('/api/socio/dni/:dni', (req, res) => {
+  const dni = req.params.dni;
+
+  sql.open(connectionString, async (err, conn) => {
+    if (err) {
+      return res.status(500).json({ mensaje: 'Error de conexión', error: err });
+    }
+
+    try {
+      const query = `
+SELECT 
+  P.nombre AS nombre_socio,
+  P.apellido AS apellido_socio,
+  P.dni,
+  A.nombre AS nombre_actividad,
+  A.dia,
+  A.horario,
+  PP.nombre AS nombre_profesor,
+  PP.apellido AS apellido_profesor
+FROM Persona P
+INNER JOIN Socio S ON P.id_persona = S.id_persona
+INNER JOIN Inscripcion I ON S.id_socio = I.id_socio
+INNER JOIN Actividad A ON I.id_actividad = A.id_actividad
+INNER JOIN ProfesorActividad PA ON A.id_actividad = PA.id_actividad
+INNER JOIN Profesor PR ON PA.id_profesor = PR.id_profesor
+INNER JOIN Persona PP ON PR.id_persona = PP.id_persona
+WHERE P.dni = ?;
+      `;
+
+      const result = await ejecutarQuery(conn, query, [dni]);
+
+      if (result.recordset.length === 0) {
+        return res.status(404).json({ mensaje: 'Socio no encontrado o sin inscripciones' });
+      }
+
+      res.json(result.recordset); // puede devolver varias actividades
+    } catch (error) {
+      console.error("Error al buscar socio por DNI:", error);
+      res.status(500).json({ mensaje: 'Error al buscar socio', error: error.message || error });
+    }
+  });
+});
+app.get('/api/actividades/:dia', (req, res) => {
+  const dia = req.params.dia.toLowerCase();
+
+  sql.open(connectionString, async (err, conn) => {
+    if (err) return res.status(500).json({ mensaje: 'Error de conexión', error: err });
+
+    try {
+      const query = `
+        SELECT nombre, dia, horario, lugar, precio, 
+               (SELECT COUNT(*) FROM Inscripcion I WHERE I.id_actividad = A.id_actividad) AS cantidad_anotados,
+               cupo_maximo
+        FROM Actividad A
+        WHERE LOWER(dia) = @dia
+      `;
+
+      const result = await conn.request()
+        .input('dia', sql.VarChar, dia)
+        .query(query);
+
+      res.json(result.recordset);
+
+    } catch (error) {
+      console.error("Error al obtener actividades:", error);
+      res.status(500).json({ mensaje: 'Error al obtener actividades', error: error.message || error });
+    }
+  });
+});
+
+
+
+
 app.delete('/api/socios/:id', (req, res) => {
   const idSocio = req.params.id;
 
@@ -291,7 +404,7 @@ app.get('/api/actividades', (req, res) => {
       dia,
       horario,
       lugar,
-      '$ ' + FORMAT(precio, 'N2', 'es-AR') AS precio,
+      precio,
       cupo_maximo,
       cantidad_anotados
     FROM Actividad
